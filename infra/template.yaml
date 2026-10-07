@@ -2,17 +2,11 @@ AWSTemplateFormatVersion: "2010-09-09"
 Transform: AWS::Serverless-2016-10-31
 Description: Daily Motivation Quote & Insight Generator
 
-Parameters:
-  AccountId:
-    Type: String
-    Default: !Sub "${AWS::AccountId}"
-
 Globals:
   Function:
     Runtime: python3.12
     Timeout: 60
     MemorySize: 256
-    Role: !GetAtt AppBedrockRole.Arn
     Environment:
       Variables:
         AWS_LAMBDA_EXEC_WRAPPER: /opt/bootstrap
@@ -58,6 +52,7 @@ Resources:
       FunctionName: daily-motivation-quote-generator
       CodeUri: ../lambdas/your_motivational_quote/
       Handler: run.sh
+      Role: !GetAtt AppBedrockRole.Arn
       FunctionUrlConfig:
         AuthType: NONE
         InvokeMode: RESPONSE_STREAM
@@ -69,6 +64,7 @@ Resources:
       FunctionName: daily-motivation-coach-chat
       CodeUri: ../lambdas/motivation_coach_chat/
       Handler: run.sh
+      Role: !GetAtt AppBedrockRole.Arn
       FunctionUrlConfig:
         AuthType: NONE
         InvokeMode: RESPONSE_STREAM
