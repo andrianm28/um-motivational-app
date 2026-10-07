@@ -1,6 +1,6 @@
 import json
 import boto3
-from flask import Flask, request, Response, stream_with_context
+from flask import Flask, request, Response
 
 app = Flask(__name__)
 
@@ -24,15 +24,9 @@ SYSTEM_PROMPT = (
     "the user clearly wants more depth."
 )
 
-OPENING_MESSAGE = (
-    "Hey there! I'm your personal motivation coach, ready to chat about whatever's on your "
-    "mind — whether it's a goal you're chasing, a setback you're facing, or just needing a "
-    "pep talk. What's going on with you today?"
-)
-
 
 def sanitize_history(history: list) -> list:
-    """Ensure history alternates user/assistant and only contains valid roles."""
+    """Ensure history only contains valid roles and non-empty content."""
     sanitized = []
     for entry in history:
         role = entry.get("role", "")
@@ -43,11 +37,13 @@ def sanitize_history(history: list) -> list:
 
 
 @app.route("/", methods=["OPTIONS"])
+@app.route("/chat", methods=["OPTIONS"])
 def options():
     return Response("", status=200, headers=CORS_HEADERS)
 
 
 @app.route("/", methods=["POST"])
+@app.route("/chat", methods=["POST"])
 def chat():
     data = request.get_json(force=True, silent=True) or {}
 
@@ -62,7 +58,6 @@ def chat():
             headers=CORS_HEADERS,
         )
 
-    # Build full messages list: prior history + new user message
     messages = history + [{"role": "user", "content": message}]
 
     request_body = {
@@ -72,23 +67,25 @@ def chat():
         "messages": messages,
     }
 
-    def generate():
-        response = BEDROCK_CLIENT.invoke_model_with_response_stream(
-            modelId=MODEL_ID,
-            body=json.dumps(request_body),
-        )
-        for event in response["body"]:
-            chunk = event.get("chunk")
-            if chunk:
-                payload = json.loads(chunk["bytes"])
-                if payload.get("type") == "content_block_delta":
-                    delta = payload.get("delta", {})
-                    text = delta.get("text", "")
-                    if text:
-                        yield text
+    # Collect full response (API Gateway does not support streaming)
+    full_text = ""
+    response = BEDROCK_CLIENT.invoke_model_with_response_stream(
+        modelId=MODEL_ID,
+        body=json.dumps(request_body),
+    )
+    for event in response["body"]:
+        chunk = event.get("chunk")
+        if chunk:
+            payload = json.loads(chunk["bytes"])
+            if payload.get("type") == "content_block_delta":
+                delta = payload.get("delta", {})
+                text = delta.get("text", "")
+                if text:
+                    full_text += text
 
     return Response(
-        stream_with_context(generate()),
+        full_text,
+        status=200,
         content_type="text/plain; charset=utf-8",
         headers=CORS_HEADERS,
     )

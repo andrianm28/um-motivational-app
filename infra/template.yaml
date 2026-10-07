@@ -9,8 +9,6 @@ Globals:
     MemorySize: 256
     Environment:
       Variables:
-        AWS_LAMBDA_EXEC_WRAPPER: /opt/bootstrap
-        AWS_LWA_INVOKE_MODE: response_stream
         PORT: "8080"
     Layers:
       - !Sub "arn:aws:lambda:${AWS::Region}:753240598075:layer:LambdaAdapterLayerX86:27"
@@ -46,7 +44,7 @@ Resources:
                   - "arn:aws:bedrock:*::foundation-model/anthropic.claude-haiku-4-5-20251001-v1:0"
                   - "arn:aws:bedrock:::foundation-model/anthropic.claude-haiku-4-5-20251001-v1:0"
 
-  # ── Lambda 1: Your Motivational Quote ────────────────────────────────────
+  # ── Lambda 1: Your Motivational Quote ─────────────────────────────────────
   YourMotivationalQuoteFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -54,11 +52,11 @@ Resources:
       CodeUri: ../lambdas/your_motivational_quote/
       Handler: run.sh
       Role: !GetAtt AppBedrockRole.Arn
-      FunctionUrlConfig:
-        AuthType: NONE
-        InvokeMode: RESPONSE_STREAM
+      Environment:
+        Variables:
+          AWS_LAMBDA_EXEC_WRAPPER: /opt/bootstrap
 
-  # ── Lambda 2: Motivation Coach Chat ──────────────────────────────────────
+  # ── Lambda 2: Motivation Coach Chat ───────────────────────────────────────
   MotivationCoachChatFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -66,9 +64,81 @@ Resources:
       CodeUri: ../lambdas/motivation_coach_chat/
       Handler: run.sh
       Role: !GetAtt AppBedrockRole.Arn
-      FunctionUrlConfig:
-        AuthType: NONE
-        InvokeMode: RESPONSE_STREAM
+      Environment:
+        Variables:
+          AWS_LAMBDA_EXEC_WRAPPER: /opt/bootstrap
+
+  # ── API Gateway HTTP API ───────────────────────────────────────────────────
+  MotivationApi:
+    Type: AWS::ApiGatewayV2::Api
+    Properties:
+      Name: daily-motivation-api
+      ProtocolType: HTTP
+      CorsConfiguration:
+        AllowOrigins:
+          - "*"
+        AllowMethods:
+          - POST
+          - OPTIONS
+        AllowHeaders:
+          - Content-Type
+
+  # Quote integration
+  QuoteIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref MotivationApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${YourMotivationalQuoteFunction.Arn}/invocations"
+      PayloadFormatVersion: "2.0"
+
+  QuoteRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref MotivationApi
+      RouteKey: "POST /quote"
+      Target: !Sub "integrations/${QuoteIntegration}"
+
+  # Chat integration
+  ChatIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref MotivationApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${MotivationCoachChatFunction.Arn}/invocations"
+      PayloadFormatVersion: "2.0"
+
+  ChatRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref MotivationApi
+      RouteKey: "POST /chat"
+      Target: !Sub "integrations/${ChatIntegration}"
+
+  # Stage (auto-deploy)
+  ApiStage:
+    Type: AWS::ApiGatewayV2::Stage
+    Properties:
+      ApiId: !Ref MotivationApi
+      StageName: "$default"
+      AutoDeploy: true
+
+  # Lambda permissions for API Gateway
+  QuoteLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !GetAtt YourMotivationalQuoteFunction.Arn
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${MotivationApi}/*/*/quote"
+
+  ChatLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !GetAtt MotivationCoachChatFunction.Arn
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${MotivationApi}/*/*/chat"
 
   # ── S3 Frontend Bucket ────────────────────────────────────────────────────
   FrontendBucket:
@@ -99,12 +169,12 @@ Resources:
 
 Outputs:
   YourMotivationalQuoteUrl:
-    Description: Streaming Function URL for quote generator
-    Value: !GetAtt YourMotivationalQuoteFunctionUrl.FunctionUrl
+    Description: API Gateway URL for quote generator
+    Value: !Sub "https://${MotivationApi}.execute-api.${AWS::Region}.amazonaws.com/quote"
 
   MotivationCoachChatUrl:
-    Description: Streaming Function URL for coach chat
-    Value: !GetAtt MotivationCoachChatFunctionUrl.FunctionUrl
+    Description: API Gateway URL for coach chat
+    Value: !Sub "https://${MotivationApi}.execute-api.${AWS::Region}.amazonaws.com/chat"
 
   WebsiteUrl:
     Description: S3 static website URL

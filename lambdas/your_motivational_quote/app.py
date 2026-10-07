@@ -1,6 +1,6 @@
 import json
 import boto3
-from flask import Flask, request, Response, stream_with_context
+from flask import Flask, request, Response
 
 app = Flask(__name__)
 
@@ -17,6 +17,7 @@ SYSTEM_PROMPT = (
     "You are a wise and creative author of motivational quotes, able to channel the voice "
     "of a legendary speaker, sage mentor, or inspiring persona."
 )
+
 
 def build_prompt(mood: str, tone: str, theme: str) -> str:
     theme_line = (
@@ -43,11 +44,13 @@ Keep the advice concise, specific, and genuinely useful, avoiding vague platitud
 
 
 @app.route("/", methods=["OPTIONS"])
+@app.route("/quote", methods=["OPTIONS"])
 def options():
     return Response("", status=200, headers=CORS_HEADERS)
 
 
 @app.route("/", methods=["POST"])
+@app.route("/quote", methods=["POST"])
 def generate_quote():
     data = request.get_json(force=True, silent=True) or {}
     mood  = data.get("mood",  "Success")
@@ -56,7 +59,6 @@ def generate_quote():
 
     prompt = build_prompt(mood, tone, theme)
 
-    # Build messages — text only (no file upload for quote widget)
     messages = [{"role": "user", "content": prompt}]
 
     request_body = {
@@ -66,23 +68,25 @@ def generate_quote():
         "messages": messages,
     }
 
-    def generate():
-        response = BEDROCK_CLIENT.invoke_model_with_response_stream(
-            modelId=MODEL_ID,
-            body=json.dumps(request_body),
-        )
-        for event in response["body"]:
-            chunk = event.get("chunk")
-            if chunk:
-                payload = json.loads(chunk["bytes"])
-                if payload.get("type") == "content_block_delta":
-                    delta = payload.get("delta", {})
-                    text = delta.get("text", "")
-                    if text:
-                        yield text
+    # Collect full response (API Gateway does not support streaming)
+    full_text = ""
+    response = BEDROCK_CLIENT.invoke_model_with_response_stream(
+        modelId=MODEL_ID,
+        body=json.dumps(request_body),
+    )
+    for event in response["body"]:
+        chunk = event.get("chunk")
+        if chunk:
+            payload = json.loads(chunk["bytes"])
+            if payload.get("type") == "content_block_delta":
+                delta = payload.get("delta", {})
+                text = delta.get("text", "")
+                if text:
+                    full_text += text
 
     return Response(
-        stream_with_context(generate()),
+        full_text,
+        status=200,
         content_type="text/plain; charset=utf-8",
         headers=CORS_HEADERS,
     )

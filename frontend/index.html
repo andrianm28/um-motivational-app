@@ -556,9 +556,9 @@
   }
 
   // ══════════════════════════════════════════
-  // Streaming reader — generic
+  // Fetch + animated line render (API Gateway)
   // ══════════════════════════════════════════
-  async function streamInto(url, body, container, onChunk) {
+  async function fetchAndRender(url, body, container, onLine) {
     const res = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -569,39 +569,17 @@
       throw new Error(`HTTP ${res.status}: ${err}`);
     }
 
-    const reader = res.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = '';
-    let cursor = null;
+    const text = await res.text();
+    const lines = text.split('\n');
 
-    const appendLine = (line) => {
-      if (cursor) { cursor.remove(); cursor = null; }
-      const span = renderMarkdownLine(line);
+    // Animate each line in with a small stagger delay
+    for (let i = 0; i < lines.length; i++) {
+      await new Promise(resolve => setTimeout(resolve, 30));
+      const span = renderMarkdownLine(lines[i]);
       container.appendChild(span);
-      // add blinking cursor after last element
-      cursor = document.createElement('span');
-      cursor.className = 'cursor';
-      container.appendChild(cursor);
       container.scrollTop = container.scrollHeight;
-    };
-
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split('\n');
-      buffer = lines.pop(); // keep incomplete line
-      for (const line of lines) {
-        appendLine(line);
-        if (onChunk) onChunk(line);
-      }
+      if (onLine) onLine(lines[i]);
     }
-    // flush remainder
-    if (buffer) {
-      appendLine(buffer);
-      if (onChunk) onChunk(buffer);
-    }
-    if (cursor) { cursor.remove(); cursor = null; }
   }
 
   // ══════════════════════════════════════════
@@ -625,7 +603,7 @@
 
     try {
       const body = { mood, tone, theme };
-      await streamInto(STREAM_URLS.your_motivational_quote, body, output, null);
+      await fetchAndRender(STREAM_URLS.your_motivational_quote, body, output, null);
     } catch (e) {
       errorDiv.textContent = e.message;
       errorDiv.classList.add('active');
@@ -689,19 +667,9 @@
     // add to history
     chatHistory.push({ role: 'user', content: message });
 
-    // create assistant bubble to stream into
+    // create assistant bubble to render into
     const assistantBubble = appendStreamBubble();
     let fullReply = '';
-    let cursor = null;
-
-    const addCursor = () => {
-      if (!cursor) {
-        cursor = document.createElement('span');
-        cursor.className = 'cursor';
-        assistantBubble.appendChild(cursor);
-      }
-    };
-    addCursor();
 
     try {
       const res = await fetch(STREAM_URLS.motivation_coach_chat, {
@@ -718,38 +686,22 @@
         throw new Error(`HTTP ${res.status}: ${err}`);
       }
 
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = '';
+      const text = await res.text();
+      const lines = text.split('\n');
 
-      const flushLine = (line) => {
-        if (cursor) { cursor.remove(); cursor = null; }
-        const span = renderMarkdownLine(line);
+      for (let i = 0; i < lines.length; i++) {
+        await new Promise(resolve => setTimeout(resolve, 30));
+        const span = renderMarkdownLine(lines[i]);
         assistantBubble.appendChild(span);
-        cursor = document.createElement('span');
-        cursor.className = 'cursor';
-        assistantBubble.appendChild(cursor);
-        const messages = document.getElementById('chat-messages');
-        messages.scrollTop = messages.scrollHeight;
-        fullReply += line + '\n';
-      };
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop();
-        for (const line of lines) flushLine(line);
+        const msgs = document.getElementById('chat-messages');
+        msgs.scrollTop = msgs.scrollHeight;
+        fullReply += lines[i] + '\n';
       }
-      if (buffer) flushLine(buffer);
-      if (cursor) { cursor.remove(); cursor = null; }
 
       // add assistant reply to history
       chatHistory.push({ role: 'assistant', content: fullReply.trim() });
 
     } catch (e) {
-      if (cursor) cursor.remove();
       assistantBubble.textContent = 'Sorry, something went wrong. Please try again.';
       assistantBubble.style.color = 'var(--error)';
       errDiv.textContent = e.message;
