@@ -1,0 +1,100 @@
+name: Deploy Daily Motivation App
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    name: Build & Deploy to AWS
+    runs-on: ubuntu-latest
+
+    steps:
+      # ── 1. Checkout ────────────────────────────────────────────────────────
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # ── 2. Configure AWS credentials ───────────────────────────────────────
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region:            ap-southeast-1
+
+      # ── 3. Set up Python 3.12 ──────────────────────────────────────────────
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # ── 4. Set up AWS SAM CLI ──────────────────────────────────────────────
+      - name: Set up AWS SAM CLI
+        uses: aws-actions/setup-sam@v2
+        with:
+          use-installer: true
+
+      # ── 5. SAM Build ───────────────────────────────────────────────────────
+      - name: SAM Build
+        run: sam build --template infra/template.yaml
+
+      # ── 6. SAM Deploy ──────────────────────────────────────────────────────
+      - name: SAM Deploy
+        run: |
+          sam deploy \
+            --stack-name daily-motivation-quote-insight-generator \
+            --s3-bucket ${{ secrets.SAM_DEPLOY_BUCKET }} \
+            --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM \
+            --region ap-southeast-1 \
+            --no-confirm-changeset \
+            --no-fail-on-empty-changeset
+
+      # ── 7. Read CloudFormation outputs ─────────────────────────────────────
+      - name: Read stack outputs
+        id: stack-outputs
+        run: |
+          get_output() {
+            aws cloudformation describe-stacks \
+              --stack-name daily-motivation-quote-insight-generator \
+              --query "Stacks[0].Outputs[?OutputKey=='$1'].OutputValue" \
+              --output text
+          }
+
+          QUOTE_URL=$(get_output YourMotivationalQuoteUrl)
+          CHAT_URL=$(get_output MotivationCoachChatUrl)
+          BUCKET=$(get_output BucketName)
+          WEBSITE=$(get_output WebsiteUrl)
+
+          echo "QUOTE_URL=$QUOTE_URL"   >> "$GITHUB_OUTPUT"
+          echo "CHAT_URL=$CHAT_URL"     >> "$GITHUB_OUTPUT"
+          echo "BUCKET=$BUCKET"         >> "$GITHUB_OUTPUT"
+          echo "WEBSITE=$WEBSITE"       >> "$GITHUB_OUTPUT"
+
+      # ── 8. Inject Lambda URLs into frontend ────────────────────────────────
+      - name: Inject Lambda URLs into frontend
+        run: |
+          QUOTE_URL="${{ steps.stack-outputs.outputs.QUOTE_URL }}"
+          CHAT_URL="${{ steps.stack-outputs.outputs.CHAT_URL }}"
+
+          sed -i "s|__URL_YOUR_MOTIVATIONAL_QUOTE__|${QUOTE_URL}|g" frontend/index.html
+          sed -i "s|__URL_MOTIVATION_COACH_CHAT__|${CHAT_URL}|g"    frontend/index.html
+
+          echo "Injected URLs:"
+          echo "  Quote  → $QUOTE_URL"
+          echo "  Chat   → $CHAT_URL"
+
+      # ── 9. Deploy frontend to S3 ───────────────────────────────────────────
+      - name: Deploy frontend to S3
+        run: |
+          aws s3 sync frontend/ \
+            s3://${{ steps.stack-outputs.outputs.BUCKET }}/ \
+            --cache-control no-cache \
+            --delete
+
+      # ── 10. Print website URL ──────────────────────────────────────────────
+      - name: Print website URL
+        run: |
+          echo "✅ Deployment complete!"
+          echo "🌐 Website: ${{ steps.stack-outputs.outputs.WEBSITE }}"

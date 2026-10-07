@@ -1,0 +1,765 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Daily Motivation Quote &amp; Insight Generator</title>
+  <style>
+    /* ── Reset & Base ── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:          #0f1117;
+      --surface:     #1a1d27;
+      --surface2:    #22263a;
+      --border:      #2e3250;
+      --accent:      #7c6af7;
+      --accent-glow: #7c6af755;
+      --accent2:     #4fd1c5;
+      --text:        #e8eaf6;
+      --text-muted:  #8892b0;
+      --text-dim:    #4a5568;
+      --success:     #48bb78;
+      --error:       #fc8181;
+      --radius:      12px;
+      --radius-sm:   8px;
+      --shadow:      0 4px 24px rgba(0,0,0,.45);
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      font-size: 15px;
+      line-height: 1.65;
+      min-height: 100vh;
+    }
+
+    /* ── Layout ── */
+    .page-header {
+      background: linear-gradient(135deg, #1a1d27 0%, #12152b 100%);
+      border-bottom: 1px solid var(--border);
+      padding: 28px 24px 22px;
+      text-align: center;
+    }
+    .page-header h1 {
+      font-size: clamp(1.4rem, 4vw, 2rem);
+      font-weight: 700;
+      background: linear-gradient(90deg, var(--accent) 0%, var(--accent2) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      letter-spacing: -.3px;
+    }
+    .page-header p {
+      color: var(--text-muted);
+      margin-top: 6px;
+      font-size: .92rem;
+      max-width: 580px;
+      margin-inline: auto;
+    }
+
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 28px 20px 60px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    /* ── Widget Card ── */
+    .widget {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+      box-shadow: var(--shadow);
+      transition: border-color .2s;
+    }
+    .widget:focus-within { border-color: var(--accent); }
+
+    .widget-header {
+      padding: 14px 18px 10px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      border-bottom: 1px solid var(--border);
+    }
+    .widget-icon {
+      width: 28px; height: 28px;
+      border-radius: 7px;
+      display: grid; place-items: center;
+      font-size: 15px;
+      flex-shrink: 0;
+    }
+    .widget-icon.input-icon  { background: #2d2060; color: #a78bfa; }
+    .widget-icon.ai-icon     { background: #1a3a2a; color: #48bb78; }
+    .widget-icon.chat-icon   { background: #1a2a3a; color: #60a5fa; }
+
+    .widget-title {
+      font-weight: 600;
+      font-size: .95rem;
+      color: var(--text);
+    }
+    .badge {
+      font-size: .7rem;
+      padding: 2px 8px;
+      border-radius: 99px;
+      font-weight: 500;
+      margin-left: auto;
+    }
+    .badge-optional { background: #2a2a40; color: var(--text-muted); }
+    .badge-ai       { background: #1a3a2a; color: var(--success); }
+    .badge-chat     { background: #1a2a3a; color: #60a5fa; }
+
+    .widget-body { padding: 16px 18px; }
+
+    /* ── Inputs ── */
+    .input-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+    @media (max-width: 540px) { .input-row { grid-template-columns: 1fr; } }
+
+    label {
+      display: block;
+      font-size: .82rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: .6px;
+      margin-bottom: 7px;
+    }
+
+    select, textarea {
+      width: 100%;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      color: var(--text);
+      font-family: inherit;
+      font-size: .93rem;
+      transition: border-color .2s, box-shadow .2s;
+      outline: none;
+    }
+    select:focus, textarea:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-glow);
+    }
+    select {
+      padding: 10px 36px 10px 12px;
+      appearance: none;
+      -webkit-appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%238892b0' stroke-width='1.8' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 12px center;
+      cursor: pointer;
+    }
+    select option { background: var(--surface2); }
+
+    textarea {
+      padding: 11px 13px;
+      resize: vertical;
+      min-height: 80px;
+    }
+    textarea::placeholder { color: var(--text-dim); }
+
+    /* ── Run All Button ── */
+    .run-bar {
+      display: flex;
+      justify-content: center;
+    }
+    .btn-run {
+      background: linear-gradient(135deg, var(--accent) 0%, #6355d8 100%);
+      color: #fff;
+      border: none;
+      border-radius: var(--radius-sm);
+      padding: 13px 40px;
+      font-size: 1rem;
+      font-weight: 700;
+      cursor: pointer;
+      letter-spacing: .3px;
+      box-shadow: 0 4px 18px #7c6af740;
+      transition: opacity .2s, transform .1s, box-shadow .2s;
+      display: flex;
+      align-items: center;
+      gap: 9px;
+    }
+    .btn-run:hover  { opacity: .9; box-shadow: 0 6px 24px #7c6af760; }
+    .btn-run:active { transform: scale(.98); }
+    .btn-run:disabled { opacity: .55; cursor: not-allowed; }
+    .btn-run svg { width: 18px; height: 18px; }
+
+    /* ── Output Panel ── */
+    .output-panel {
+      height: 340px;
+      overflow-y: auto;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 14px 16px;
+      font-size: .9rem;
+      position: relative;
+    }
+    /* thin custom scrollbar */
+    .output-panel::-webkit-scrollbar { width: 5px; }
+    .output-panel::-webkit-scrollbar-track { background: transparent; }
+    .output-panel::-webkit-scrollbar-thumb { background: var(--border); border-radius: 99px; }
+
+    .placeholder-text {
+      color: var(--text-dim);
+      font-style: italic;
+      font-size: .88rem;
+      padding-top: 4px;
+    }
+
+    /* ── Spinner ── */
+    .spinner-wrap {
+      display: none;
+      align-items: center;
+      gap: 10px;
+      color: var(--text-muted);
+      font-size: .85rem;
+      padding: 6px 0;
+    }
+    .spinner-wrap.active { display: flex; }
+    .spinner {
+      width: 18px; height: 18px;
+      border: 2px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin .7s linear infinite;
+      flex-shrink: 0;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Error ── */
+    .error-msg {
+      display: none;
+      color: var(--error);
+      font-size: .83rem;
+      margin-top: 8px;
+      padding: 8px 12px;
+      background: #2a1a1a;
+      border: 1px solid #5a2a2a;
+      border-radius: var(--radius-sm);
+    }
+    .error-msg.active { display: block; }
+
+    /* ── Markdown lines ── */
+    .md-line {
+      display: block;
+      animation: fadeIn .18s ease forwards;
+      opacity: 0;
+    }
+    @keyframes fadeIn { to { opacity: 1; } }
+
+    .md-line.h1 { font-size: 1.3rem; font-weight: 700; margin: 10px 0 4px; color: var(--accent2); }
+    .md-line.h2 { font-size: 1.1rem; font-weight: 700; margin: 8px 0 4px; color: var(--accent2); }
+    .md-line.h3 { font-size: 1rem;   font-weight: 700; margin: 6px 0 4px; color: var(--accent2); }
+    .md-line.hr { border: none; border-top: 1px solid var(--border); margin: 12px 0; display: block; height: 1px; }
+    .md-line.bullet { padding-left: 16px; position: relative; }
+    .md-line.bullet::before { content: '•'; position: absolute; left: 4px; color: var(--accent); }
+    .md-line.numbered { padding-left: 20px; }
+    .md-line.blank  { display: block; height: .5em; }
+
+    .cursor {
+      display: inline-block;
+      width: 2px; height: 1em;
+      background: var(--accent);
+      vertical-align: text-bottom;
+      animation: blink .8s steps(1) infinite;
+      margin-left: 1px;
+    }
+    @keyframes blink { 50% { opacity: 0; } }
+
+    /* ── Chat ── */
+    .chat-window {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      display: flex;
+      flex-direction: column;
+      min-height: 420px;
+    }
+    .chat-messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      min-height: 300px;
+      max-height: 480px;
+    }
+    .chat-messages::-webkit-scrollbar { width: 5px; }
+    .chat-messages::-webkit-scrollbar-thumb { background: var(--border); border-radius: 99px; }
+
+    .bubble {
+      max-width: 82%;
+      padding: 10px 14px;
+      border-radius: 16px;
+      font-size: .9rem;
+      line-height: 1.55;
+      word-break: break-word;
+    }
+    .bubble.assistant {
+      align-self: flex-start;
+      background: #22263a;
+      border: 1px solid var(--border);
+      border-bottom-left-radius: 4px;
+      color: var(--text);
+    }
+    .bubble.user {
+      align-self: flex-end;
+      background: linear-gradient(135deg, var(--accent) 0%, #6355d8 100%);
+      color: #fff;
+      border-bottom-right-radius: 4px;
+    }
+
+    .chat-input-row {
+      display: flex;
+      gap: 10px;
+      padding: 12px 14px;
+      border-top: 1px solid var(--border);
+      align-items: flex-end;
+    }
+    .chat-input-row textarea {
+      flex: 1;
+      min-height: 42px;
+      max-height: 120px;
+      padding: 10px 13px;
+      resize: none;
+      font-size: .9rem;
+    }
+    .btn-send {
+      background: var(--accent);
+      border: none;
+      border-radius: var(--radius-sm);
+      color: #fff;
+      padding: 10px 16px;
+      cursor: pointer;
+      font-size: .9rem;
+      font-weight: 600;
+      transition: opacity .2s;
+      white-space: nowrap;
+      height: 42px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .btn-send:hover    { opacity: .88; }
+    .btn-send:disabled { opacity: .5; cursor: not-allowed; }
+    .btn-send svg { width: 16px; height: 16px; }
+
+    .chat-error {
+      color: var(--error);
+      font-size: .8rem;
+      padding: 4px 14px 8px;
+    }
+
+    /* ── Footer ── */
+    .footer-note {
+      text-align: center;
+      color: var(--text-dim);
+      font-size: .78rem;
+      padding: 12px 0 0;
+    }
+  </style>
+</head>
+<body>
+
+<!-- ══ Header ══ -->
+<header class="page-header">
+  <h1>✨ Daily Motivation Quote &amp; Insight Generator</h1>
+  <p>Need a boost? Pick a mood, choose a tone, and optionally add a personal theme. Our AI will craft a unique, original motivational quote just for you, plus a quick tip on how to apply it to your day.</p>
+</header>
+
+<main class="container">
+
+  <!-- ══ Widget 1 + 2: Inputs (side by side) ══ -->
+  <div class="widget">
+    <div class="widget-header">
+      <div class="widget-icon input-icon">🎯</div>
+      <span class="widget-title">Input Settings</span>
+    </div>
+    <div class="widget-body">
+      <div class="input-row">
+        <!-- Widget 1: Mood or Topic -->
+        <div>
+          <label for="mood">Mood or Topic</label>
+          <select id="mood">
+            <option value="Success" selected>Success</option>
+            <option value="Perseverance">Perseverance</option>
+            <option value="Confidence">Confidence</option>
+            <option value="Overcoming Adversity">Overcoming Adversity</option>
+          </select>
+        </div>
+        <!-- Widget 2: Quote Tone -->
+        <div>
+          <label for="tone">Quote Tone</label>
+          <select id="tone">
+            <option value="Uplifting" selected>Uplifting</option>
+            <option value="Tough Love">Tough Love</option>
+            <option value="Calm and Zen">Calm and Zen</option>
+            <option value="Humorous">Humorous</option>
+          </select>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ Widget 3: Specific Theme or Keyword ══ -->
+  <div class="widget">
+    <div class="widget-header">
+      <div class="widget-icon input-icon">✏️</div>
+      <span class="widget-title">Specific Theme or Keyword</span>
+      <span class="badge badge-optional">Optional</span>
+    </div>
+    <div class="widget-body">
+      <textarea
+        id="theme"
+        placeholder="e.g. new beginnings, career change, fitness journey (optional)"
+        rows="3"
+      ></textarea>
+    </div>
+  </div>
+
+  <!-- ══ Run All Button ══ -->
+  <div class="run-bar">
+    <button class="btn-run" id="btn-run-all" onclick="runAll()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+        <polygon points="5 3 19 12 5 21 5 3"/>
+      </svg>
+      Generate Quote
+    </button>
+  </div>
+
+  <!-- ══ Widget 4: Your Motivational Quote ══ -->
+  <div class="widget">
+    <div class="widget-header">
+      <div class="widget-icon ai-icon">🤖</div>
+      <span class="widget-title">Your Motivational Quote</span>
+      <span class="badge badge-ai">AI · Bedrock</span>
+    </div>
+    <div class="widget-body">
+      <div class="spinner-wrap" id="spinner-quote">
+        <div class="spinner"></div>
+        <span>Crafting your quote…</span>
+      </div>
+      <div class="output-panel" id="output-quote">
+        <span class="placeholder-text">Your AI-generated motivational quote will appear here. Click "Generate Quote" to begin.</span>
+      </div>
+      <div class="error-msg" id="error-quote"></div>
+    </div>
+  </div>
+
+  <!-- ══ Widget 5: Motivation Coach Chat ══ -->
+  <div class="widget">
+    <div class="widget-header">
+      <div class="widget-icon chat-icon">💬</div>
+      <span class="widget-title">Motivation Coach Chat</span>
+      <span class="badge badge-chat">AI · Chat</span>
+    </div>
+    <div class="widget-body">
+      <div class="chat-window">
+        <div class="chat-messages" id="chat-messages">
+          <!-- Opening message -->
+          <div class="bubble assistant">
+            Hey there! I'm your personal motivation coach, ready to chat about whatever's on your mind — whether it's a goal you're chasing, a setback you're facing, or just needing a pep talk. What's going on with you today?
+          </div>
+        </div>
+        <div class="chat-error" id="chat-error"></div>
+        <div class="chat-input-row">
+          <textarea
+            id="chat-input"
+            placeholder="Type your message…"
+            rows="1"
+            onkeydown="handleChatKey(event)"
+          ></textarea>
+          <button class="btn-send" id="btn-send" onclick="sendChat()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="22" y1="2" x2="11" y2="13"/>
+              <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+            </svg>
+            Send
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <p class="footer-note">Powered by Amazon Bedrock · Claude Haiku 4.5</p>
+</main>
+
+<script>
+  // ── Injected by GitHub Actions (placeholders replaced by sed in deploy.yml) ──
+  // For local dev: replace the placeholder strings below with your real Lambda
+  // Function URLs, OR set window.LOCAL_URLS before this script runs.
+  // Production URLs are injected automatically — do not commit real URLs here.
+  const _placeholderQuote = '__URL_YOUR_MOTIVATIONAL_QUOTE__';
+  const _placeholderChat  = '__URL_MOTIVATION_COACH_CHAT__';
+
+  // Detect whether placeholders were replaced (i.e. running locally vs deployed)
+  const _isLocal = _placeholderQuote.startsWith('__URL_');
+
+  const STREAM_URLS = {
+    your_motivational_quote: _isLocal
+      ? (window.LOCAL_URLS?.your_motivational_quote || 'http://localhost:8080')
+      : _placeholderQuote,
+    motivation_coach_chat: _isLocal
+      ? (window.LOCAL_URLS?.motivation_coach_chat   || 'http://localhost:8081')
+      : _placeholderChat,
+  };
+
+  if (_isLocal) {
+    console.warn(
+      '[dev] Lambda URLs not injected — using local fallbacks.\n' +
+      'Quote:  ' + STREAM_URLS.your_motivational_quote + '\n' +
+      'Chat:   ' + STREAM_URLS.motivation_coach_chat + '\n\n' +
+      'To override: set window.LOCAL_URLS = { your_motivational_quote: "...", motivation_coach_chat: "..." } ' +
+      'in the browser console before clicking Generate.'
+    );
+  }
+
+  // ── Chat history ──
+  let chatHistory = [];
+
+  // ══════════════════════════════════════════
+  // Markdown renderer (line-by-line)
+  // ══════════════════════════════════════════
+  function renderMarkdownLine(text) {
+    // inline patterns
+    const inline = (s) =>
+      s
+        .replace(/`([^`]+)`/g, '<code style="background:#1e2235;padding:1px 5px;border-radius:4px;font-family:monospace;font-size:.88em">$1</code>')
+        .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+        .replace(/\*(.+?)\*/g, '<em>$1</em>');
+
+    const span = document.createElement('span');
+    span.classList.add('md-line');
+
+    if (/^### /.test(text))       { span.classList.add('h3'); span.innerHTML = inline(text.slice(4)); }
+    else if (/^## /.test(text))   { span.classList.add('h2'); span.innerHTML = inline(text.slice(3)); }
+    else if (/^# /.test(text))    { span.classList.add('h1'); span.innerHTML = inline(text.slice(2)); }
+    else if (/^---+$/.test(text)) { span.classList.add('hr'); }
+    else if (/^[-*] /.test(text)) { span.classList.add('bullet'); span.innerHTML = inline(text.slice(2)); }
+    else if (/^\d+\. /.test(text)){ span.classList.add('numbered'); span.innerHTML = inline(text.replace(/^\d+\. /,'')); }
+    else if (text === '')          { span.classList.add('blank'); }
+    else                           { span.innerHTML = inline(text); }
+
+    return span;
+  }
+
+  // ══════════════════════════════════════════
+  // Streaming reader — generic
+  // ══════════════════════════════════════════
+  async function streamInto(url, body, container, onChunk) {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+      const err = await res.text();
+      throw new Error(`HTTP ${res.status}: ${err}`);
+    }
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let cursor = null;
+
+    const appendLine = (line) => {
+      if (cursor) { cursor.remove(); cursor = null; }
+      const span = renderMarkdownLine(line);
+      container.appendChild(span);
+      // add blinking cursor after last element
+      cursor = document.createElement('span');
+      cursor.className = 'cursor';
+      container.appendChild(cursor);
+      container.scrollTop = container.scrollHeight;
+    };
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop(); // keep incomplete line
+      for (const line of lines) {
+        appendLine(line);
+        if (onChunk) onChunk(line);
+      }
+    }
+    // flush remainder
+    if (buffer) {
+      appendLine(buffer);
+      if (onChunk) onChunk(buffer);
+    }
+    if (cursor) { cursor.remove(); cursor = null; }
+  }
+
+  // ══════════════════════════════════════════
+  // Widget 4 — Generate Quote
+  // ══════════════════════════════════════════
+  async function runAll() {
+    const mood  = document.getElementById('mood').value;
+    const tone  = document.getElementById('tone').value;
+    const theme = document.getElementById('theme').value.trim();
+
+    const btn       = document.getElementById('btn-run-all');
+    const spinner   = document.getElementById('spinner-quote');
+    const output    = document.getElementById('output-quote');
+    const errorDiv  = document.getElementById('error-quote');
+
+    // reset
+    btn.disabled    = true;
+    output.innerHTML = '';
+    errorDiv.classList.remove('active');
+    spinner.classList.add('active');
+
+    try {
+      const body = { mood, tone, theme };
+      await streamInto(STREAM_URLS.your_motivational_quote, body, output, null);
+    } catch (e) {
+      errorDiv.textContent = e.message;
+      errorDiv.classList.add('active');
+      if (!output.innerHTML) {
+        output.innerHTML = '<span class="placeholder-text">Failed to generate quote.</span>';
+      }
+    } finally {
+      spinner.classList.remove('active');
+      btn.disabled = false;
+    }
+  }
+
+  // ══════════════════════════════════════════
+  // Widget 5 — Chat
+  // ══════════════════════════════════════════
+  function handleChatKey(e) {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      sendChat();
+    }
+    // auto-resize textarea
+    const ta = e.target;
+    ta.style.height = 'auto';
+    ta.style.height = Math.min(ta.scrollHeight, 120) + 'px';
+  }
+
+  function appendBubble(role, text) {
+    const messages = document.getElementById('chat-messages');
+    const div = document.createElement('div');
+    div.classList.add('bubble', role);
+    div.textContent = text;
+    messages.appendChild(div);
+    messages.scrollTop = messages.scrollHeight;
+    return div;
+  }
+
+  function appendStreamBubble() {
+    const messages = document.getElementById('chat-messages');
+    const div = document.createElement('div');
+    div.classList.add('bubble', 'assistant');
+    messages.appendChild(div);
+    messages.scrollTop = messages.scrollHeight;
+    return div;
+  }
+
+  async function sendChat() {
+    const input   = document.getElementById('chat-input');
+    const btn     = document.getElementById('btn-send');
+    const errDiv  = document.getElementById('chat-error');
+    const message = input.value.trim();
+    if (!message) return;
+
+    errDiv.textContent = '';
+    input.value = '';
+    input.style.height = 'auto';
+    btn.disabled = true;
+
+    // show user bubble
+    appendBubble('user', message);
+
+    // add to history
+    chatHistory.push({ role: 'user', content: message });
+
+    // create assistant bubble to stream into
+    const assistantBubble = appendStreamBubble();
+    let fullReply = '';
+    let cursor = null;
+
+    const addCursor = () => {
+      if (!cursor) {
+        cursor = document.createElement('span');
+        cursor.className = 'cursor';
+        assistantBubble.appendChild(cursor);
+      }
+    };
+    addCursor();
+
+    try {
+      const res = await fetch(STREAM_URLS.motivation_coach_chat, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          history: chatHistory.slice(0, -1),
+          message,
+        }),
+      });
+
+      if (!res.ok) {
+        const err = await res.text();
+        throw new Error(`HTTP ${res.status}: ${err}`);
+      }
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      const flushLine = (line) => {
+        if (cursor) { cursor.remove(); cursor = null; }
+        const span = renderMarkdownLine(line);
+        assistantBubble.appendChild(span);
+        cursor = document.createElement('span');
+        cursor.className = 'cursor';
+        assistantBubble.appendChild(cursor);
+        const messages = document.getElementById('chat-messages');
+        messages.scrollTop = messages.scrollHeight;
+        fullReply += line + '\n';
+      };
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop();
+        for (const line of lines) flushLine(line);
+      }
+      if (buffer) flushLine(buffer);
+      if (cursor) { cursor.remove(); cursor = null; }
+
+      // add assistant reply to history
+      chatHistory.push({ role: 'assistant', content: fullReply.trim() });
+
+    } catch (e) {
+      if (cursor) cursor.remove();
+      assistantBubble.textContent = 'Sorry, something went wrong. Please try again.';
+      assistantBubble.style.color = 'var(--error)';
+      errDiv.textContent = e.message;
+      // remove failed message from history
+      chatHistory.pop();
+    } finally {
+      btn.disabled = false;
+      input.focus();
+    }
+  }
+</script>
+</body>
+</html>

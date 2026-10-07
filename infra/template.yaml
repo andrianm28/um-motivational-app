@@ -1,0 +1,118 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: Daily Motivation Quote & Insight Generator
+
+Parameters:
+  AccountId:
+    Type: String
+    Default: !Sub "${AWS::AccountId}"
+
+Globals:
+  Function:
+    Runtime: python3.12
+    Timeout: 60
+    MemorySize: 256
+    Role: !GetAtt AppBedrockRole.Arn
+    Environment:
+      Variables:
+        AWS_LAMBDA_EXEC_WRAPPER: /opt/bootstrap
+        AWS_LWA_INVOKE_MODE: response_stream
+        PORT: "8080"
+    Layers:
+      - !Sub "arn:aws:lambda:${AWS::Region}:753240598075:layer:LambdaAdapterLayerX86:27"
+
+Resources:
+
+  # ── IAM Role ──────────────────────────────────────────────────────────────
+  AppBedrockRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: daily-motivation-bedrock-role
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: BedrockInvokePolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - bedrock:InvokeModel
+                  - bedrock:InvokeModelWithResponseStream
+                Resource:
+                  - !Sub "arn:aws:bedrock:*:${AWS::AccountId}:inference-profile/global.anthropic.claude-haiku-4-5-20251001-v1:0"
+                  - "arn:aws:bedrock:*::foundation-model/anthropic.claude-haiku-4-5-20251001-v1:0"
+                  - "arn:aws:bedrock:::foundation-model/anthropic.claude-haiku-4-5-20251001-v1:0"
+
+  # ── Lambda 1: Your Motivational Quote ────────────────────────────────────
+  YourMotivationalQuoteFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: daily-motivation-quote-generator
+      CodeUri: ../lambdas/your_motivational_quote/
+      Handler: run.sh
+      FunctionUrlConfig:
+        AuthType: NONE
+        InvokeMode: RESPONSE_STREAM
+
+  # ── Lambda 2: Motivation Coach Chat ──────────────────────────────────────
+  MotivationCoachChatFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: daily-motivation-coach-chat
+      CodeUri: ../lambdas/motivation_coach_chat/
+      Handler: run.sh
+      FunctionUrlConfig:
+        AuthType: NONE
+        InvokeMode: RESPONSE_STREAM
+
+  # ── S3 Frontend Bucket ────────────────────────────────────────────────────
+  FrontendBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "daily-motivation-app-${AWS::AccountId}-${AWS::Region}"
+      WebsiteConfiguration:
+        IndexDocument: index.html
+        ErrorDocument: index.html
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: false
+        BlockPublicPolicy: false
+        IgnorePublicAcls: false
+        RestrictPublicBuckets: false
+
+  FrontendBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref FrontendBucket
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: PublicReadGetObject
+            Effect: Allow
+            Principal: "*"
+            Action: s3:GetObject
+            Resource: !Sub "arn:aws:s3:::${FrontendBucket}/*"
+
+Outputs:
+  YourMotivationalQuoteUrl:
+    Description: Streaming Function URL for quote generator
+    Value: !GetAtt YourMotivationalQuoteFunctionUrl.FunctionUrl
+
+  MotivationCoachChatUrl:
+    Description: Streaming Function URL for coach chat
+    Value: !GetAtt MotivationCoachChatFunctionUrl.FunctionUrl
+
+  WebsiteUrl:
+    Description: S3 static website URL
+    Value: !GetAtt FrontendBucket.WebsiteURL
+
+  BucketName:
+    Description: Frontend S3 bucket name
+    Value: !Ref FrontendBucket
